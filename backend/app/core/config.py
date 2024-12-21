@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     # Database Settings
     DATABASE_URL: Optional[PostgresDsn] = None
     
+    # Redis Settings
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_CACHE_EXPIRE: int = 3600  # 1 hour default
+    
     # Security Settings
     SECRET_KEY: str
     ALGORITHM: str = "HS256"

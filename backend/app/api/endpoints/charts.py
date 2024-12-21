@@ -1,12 +1,17 @@
-from fastapi import APIRouter, HTTPException
-from datetime import datetime
+from fastapi import APIRouter, HTTPException, Depends
+from datetime import datetime, timedelta
 from typing import Optional
 
 from ...core.calculations.astronomical import AstronomicalCalculator, Location
 from ...core.calculations.houses import HouseCalculator
+from ...core.calculations.aspects import AspectCalculator
+from ...core.calculations.nakshatra import NakshatraCalculator
 from ...core.models.chart import BirthChart, Location as LocationModel
+from ...core.cache import RedisCache
+from ...core.config import settings
 
 router = APIRouter()
+cache = RedisCache()
 
 @router.post("/calculate", response_model=BirthChart)
 async def calculate_chart(
@@ -18,6 +23,21 @@ async def calculate_chart(
     house_system: Optional[str] = 'P'
 ):
     try:
+        # Generate cache key
+        cache_key = cache.generate_key(
+            "chart",
+            date_time.isoformat(),
+            latitude,
+            longitude,
+            altitude,
+            ayanamsa,
+            house_system
+        )
+        
+        # Try to get from cache
+        if cached_result := await cache.get(cache_key):
+            return cached_result
+        
         # Create location objects
         calc_location = Location(latitude, longitude, altitude)
         location_model = LocationModel(
@@ -41,15 +61,30 @@ async def calculate_chart(
             calc_location
         )
         
-        # Create and return birth chart
-        return BirthChart(
+        # Calculate aspects and nakshatras
+        aspects = AspectCalculator.calculate_aspects(planetary_positions)
+        nakshatras = NakshatraCalculator.calculate_all_nakshatras(planetary_positions)
+        
+        # Create response
+        result = BirthChart(
             date_time=date_time,
             location=location_model,
             ayanamsa=ayanamsa,
             house_system=house_system,
             planetary_positions=planetary_positions,
-            houses=houses
+            houses=houses,
+            aspects=aspects,
+            nakshatras=nakshatras
         )
+        
+        # Cache the result
+        await cache.set(
+            cache_key,
+            result.dict(),
+            expire=timedelta(seconds=settings.REDIS_CACHE_EXPIRE)
+        )
+        
+        return result
         
     except Exception as e:
         raise HTTPException(

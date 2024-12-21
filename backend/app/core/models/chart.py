@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
-from pydantic import BaseModel, validator
 from decimal import Decimal
+from pydantic import BaseModel, validator
 
 class Location(BaseModel):
     latitude: Decimal
@@ -33,10 +33,29 @@ class HouseData(BaseModel):
     armc: Decimal
     vertex: Decimal
 
+class Aspect(BaseModel):
+    planet1: str
+    planet2: str
+    aspect: str
+    angle: Decimal
+    orb: Decimal
+    is_major: bool
+    is_applying: bool
+
+class NakshatraData(BaseModel):
+    number: int
+    name: str
+    lord: str
+    pada: int
+    degrees_traversed: Decimal
+    total_degrees: Decimal
+
 class BirthChart(BaseModel):
     date_time: datetime
     location: Location
-    ayanamsa: int = 1  # Default to Lahiri
-    house_system: str = 'P'  # Default to Placidus
+    ayanamsa: int = 1
+    house_system: str = 'P'
     planetary_positions: Dict[str, PlanetaryPosition]
     houses: HouseData
+    aspects: List[Aspect]
+    nakshatras: Dict[str, NakshatraData]
