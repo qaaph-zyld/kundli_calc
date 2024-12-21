@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.endpoints import charts
+from .api.endpoints import charts, health
 
 app = FastAPI(
     title="South Indian Kundli Calculator",
@@ -23,6 +23,12 @@ app.include_router(
     charts.router,
     prefix="/api/v1/charts",
     tags=["charts"]
+)
+
+app.include_router(
+    health.router,
+    prefix="/api/v1/health",
+    tags=["health"]
 )
 
 @app.get("/")
