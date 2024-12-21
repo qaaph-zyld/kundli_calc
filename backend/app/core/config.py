@@ -1,4 +1,5 @@
-from pydantic import BaseSettings, PostgresDsn, validator
+from pydantic_settings import BaseSettings
+from pydantic import PostgresDsn, validator
 from typing import List, Optional
 import os
 
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     REDIS_CACHE_EXPIRE: int = 3600  # 1 hour default
     
     # Security Settings
-    SECRET_KEY: str
+    SECRET_KEY: str = "development_secret_key"  # Change in production
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
@@ -40,18 +41,17 @@ class Settings(BaseSettings):
     @validator("DATABASE_URL", pre=True)
     def validate_database_url(cls, v: Optional[str]) -> Optional[str]:
         if not v:
-            return PostgresDsn.build(
+            return str(PostgresDsn.build(
                 scheme="postgresql",
-                user="user",
+                username="user",
                 password="password",
                 host="localhost",
-                port="5432",
+                port=5432,
                 path="/kundli_db",
-            )
+            ))
         return v
-    
+
     class Config:
         env_file = ".env"
-        case_sensitive = True
 
 settings = Settings()
