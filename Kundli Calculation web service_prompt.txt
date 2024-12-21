@@ -1,0 +1,435 @@
+I'll help you create a comprehensive prompt for developing a South Indian style Kundli calculation web service. Let me break this down systematically.
+
+
+
+Here's a structured prompt for an AI coding assistant:
+
+# Project: South Indian Kundli Calculator Web Service
+
+## Core Objectives
+1. Create an open-source web service for calculating and displaying Vedic birth charts in South Indian style
+2. Implement accurate astronomical calculations using Swiss Ephemeris
+3. Develop a responsive, accessible interface following traditional design principles
+
+## Technical Requirements
+
+### Backend Framework
+- FastAPI/Flask for REST API endpoints
+- Swiss Ephemeris (pyswisseph) for astronomical calculations
+- SQLAlchemy for data persistence
+- Pandas for data manipulation
+- Python-based calculation engine
+
+### Frontend Requirements
+- React.js with TypeScript
+- SVG-based chart rendering
+- Responsive design system
+- Accessibility compliance
+- Material-UI/Chakra UI for components
+
+### Data Requirements
+1. Astronomical calculations:
+   - Planetary positions
+   - House cusps
+   - Nakshatra positions
+   - Ayanamsa calculations (Lahiri by default)
+   - Dasha calculations
+
+2. User inputs:
+   - Birth date and time
+   - Location (latitude, longitude)
+   - Ayanamsa preference
+   - Time zone
+
+## Implementation Phases
+
+### Phase 1: Core Calculation Engine
+```python
+# Sample structure for calculation module
+class KundliEngine:
+    def __init__(self):
+        self.ephemeris = swisseph
+        
+    def calculate_planetary_positions(self, date, time, lat, lon):
+        # Implementation for planetary positions
+        
+    def calculate_houses(self, date, time, lat, lon):
+        # Implementation for house calculations
+        
+    def get_nakshatra_positions(self):
+        # Implementation for nakshatra calculations
+```
+
+### Phase 2: API Development
+- Create REST endpoints for:
+  - Chart calculation
+  - Data validation
+  - User management
+  - Chart storage and retrieval
+
+### Phase 3: Frontend Development
+- Implement South Indian chart representation:
+  - 12 equal houses in square format
+  - Planetary placement visualization
+  - Aspect lines
+  - Nakshatra indicators
+
+## Data Models
+
+```sql
+-- Basic schema structure
+CREATE TABLE birth_charts (
+    id SERIAL PRIMARY KEY,
+    date_time TIMESTAMP NOT NULL,
+    latitude DECIMAL(9,6) NOT NULL,
+    longitude DECIMAL(9,6) NOT NULL,
+    time_zone VARCHAR(50) NOT NULL,
+    ayanamsa INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE planetary_positions (
+    chart_id INTEGER REFERENCES birth_charts(id),
+    planet_id INTEGER NOT NULL,
+    longitude DECIMAL(10,6) NOT NULL,
+    nakshatra INTEGER NOT NULL,
+    house INTEGER NOT NULL
+);
+```
+
+## Testing Requirements
+1. Unit tests for calculation engine
+2. Integration tests for API endpoints
+3. Frontend component testing
+4. End-to-end testing scenarios
+
+## Documentation Requirements
+1. API documentation using OpenAPI/Swagger
+2. Technical documentation for calculations
+3. User guide for interface interaction
+4. Installation and deployment guides
+
+## Special Considerations
+1. Error handling for:
+   - Invalid date/time inputs
+   - Location validation
+   - Calculation errors
+   - API failures
+
+2. Performance optimization:
+   - Caching strategies
+   - Calculation optimization
+   - Frontend rendering optimization
+
+3. Cultural accuracy:
+   - Proper terminology usage
+   - Traditional design elements
+   - Accurate astronomical calculations
+
+## Deployment Guidelines
+1. Docker containerization
+2. CI/CD pipeline setup
+3. Environment configuration
+4. Monitoring and logging setup
+
+Would you like me to expand on any particular aspect of this prompt or create a more detailed implementation plan for any specific component?
+
+************************************************************************
+I'll create a detailed implementation plan using sophisticated cognitive reasoning and systematic decomposition.
+
+
+
+# Detailed Implementation Plan: South Indian Kundli Calculator
+
+## Phase 0: Project Foundation (2 weeks)
+
+### Environment Setup
+1. Repository initialization
+   ```bash
+   git init
+   python -m venv env
+   pip install poetry
+   poetry init
+   ```
+
+2. Core dependencies
+   ```toml
+   [tool.poetry.dependencies]
+   python = "^3.9"
+   fastapi = "^0.68.0"
+   sqlalchemy = "^1.4.23"
+   pyswisseph = "^2.8.0"
+   pandas = "^1.3.0"
+   ```
+
+### Project Structure
+```plaintext
+kundli/
+├── backend/
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── calculations/
+│   │   │   ├── models/
+│   │   │   └── utils/
+│   │   ├── api/
+│   │   └── services/
+│   ├── tests/
+│   └── alembic/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   └── services/
+│   └── tests/
+└── docker/
+```
+
+## Phase 1: Core Calculation Engine (4 weeks)
+
+### 1.1 Astronomical Calculation Module
+```python
+from dataclasses import dataclass
+from datetime import datetime
+import swisseph as swe
+
+@dataclass
+class Location:
+    latitude: float
+    longitude: float
+    altitude: float = 0
+
+class AstronomicalCalculator:
+    def __init__(self, ayanamsa: int = swe.SIDM_LAHIRI):
+        self.ayanamsa = ayanamsa
+        swe.set_sid_mode(ayanamsa)
+    
+    def calculate_planetary_positions(
+        self, 
+        datetime_utc: datetime,
+        location: Location
+    ) -> dict:
+        julian_day = swe.julday(
+            datetime_utc.year,
+            datetime_utc.month,
+            datetime_utc.day,
+            datetime_utc.hour + datetime_utc.minute/60.0
+        )
+        
+        planets = {
+            'Sun': swe.SUN,
+            'Moon': swe.MOON,
+            'Mars': swe.MARS,
+            # Add other planets
+        }
+        
+        return {
+            planet: self._calculate_position(julian_day, planet_id)
+            for planet, planet_id in planets.items()
+        }
+```
+
+### 1.2 House System Implementation
+```python
+class HouseCalculator:
+    def calculate_houses(
+        self,
+        datetime_utc: datetime,
+        location: Location
+    ) -> dict:
+        julian_day = self._get_julian_day(datetime_utc)
+        houses = swe.houses(
+            julian_day,
+            location.latitude,
+            location.longitude,
+            b'P'  # Placidus system
+        )
+        
+        return {
+            'cusps': houses[0],
+            'ascendant': houses[1][0],
+            'mc': houses[1][1]
+        }
+```
+
+## Phase 2: Database Implementation (2 weeks)
+
+### 2.1 SQL Schema
+```sql
+-- Extended schema with detailed attributes
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE birth_charts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id),
+    name VARCHAR(255),
+    date_of_birth TIMESTAMP WITH TIME ZONE NOT NULL,
+    latitude DECIMAL(9,6) NOT NULL,
+    longitude DECIMAL(9,6) NOT NULL,
+    altitude DECIMAL(9,2) DEFAULT 0,
+    time_zone VARCHAR(50) NOT NULL,
+    ayanamsa INTEGER DEFAULT 1,
+    house_system CHAR(1) DEFAULT 'P',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 2.2 SQLAlchemy Models
+```python
+from sqlalchemy import Column, ForeignKey, String, DateTime, Numeric
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = 'users'
+    
+    id = Column(UUID, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True))
+
+class BirthChart(Base):
+    __tablename__ = 'birth_charts'
+    
+    id = Column(UUID, primary_key=True)
+    user_id = Column(UUID, ForeignKey('users.id'))
+    # Add other fields
+```
+
+## Phase 3: API Development (3 weeks)
+
+### 3.1 FastAPI Implementation
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class ChartRequest(BaseModel):
+    date_time: datetime
+    latitude: float
+    longitude: float
+    time_zone: str
+    ayanamsa: int = 1
+
+@app.post("/api/v1/charts/calculate")
+async def calculate_chart(request: ChartRequest):
+    try:
+        calculator = AstronomicalCalculator(request.ayanamsa)
+        positions = calculator.calculate_planetary_positions(
+            request.date_time,
+            Location(request.latitude, request.longitude)
+        )
+        return {"status": "success", "data": positions}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+```
+
+## Phase 4: Frontend Development (4 weeks)
+
+### 4.1 Chart Component
+```typescript
+interface ChartProps {
+  planetaryPositions: PlanetaryPosition[];
+  houses: HouseData;
+  aspects: AspectData[];
+}
+
+const SouthIndianChart: React.FC<ChartProps> = ({
+  planetaryPositions,
+  houses,
+  aspects
+}) => {
+  const [dimensions, setDimensions] = useState({
+    width: 800,
+    height: 800
+  });
+
+  return (
+    <svg 
+      viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
+      className="kundli-chart"
+    >
+      <defs>
+        {/* Define gradients and patterns */}
+      </defs>
+      <g className="houses">
+        {/* Render houses grid */}
+      </g>
+      <g className="planets">
+        {/* Render planetary positions */}
+      </g>
+      <g className="aspects">
+        {/* Render aspect lines */}
+      </g>
+    </svg>
+  );
+};
+```
+
+## Phase 5: Testing and Quality Assurance (3 weeks)
+
+### 5.1 Test Implementation
+```python
+import pytest
+from app.core.calculations import AstronomicalCalculator
+
+def test_planetary_positions():
+    calculator = AstronomicalCalculator()
+    test_date = datetime(2024, 1, 1, 12, 0)
+    test_location = Location(13.0827, 80.2707)  # Chennai
+    
+    positions = calculator.calculate_planetary_positions(
+        test_date,
+        test_location
+    )
+    
+    assert len(positions) == 9  # All planets
+    assert all(0 <= pos['longitude'] <= 360 for pos in positions.values())
+```
+
+## Phase 6: Deployment and CI/CD (2 weeks)
+
+### 6.1 Docker Configuration
+```dockerfile
+# Backend Dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+COPY poetry.lock pyproject.toml ./
+RUN pip install poetry && poetry install
+
+COPY . .
+CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0"]
+```
+
+### 6.2 GitHub Actions Workflow
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Run tests
+        run: |
+          poetry install
+          poetry run pytest
+```
+
+Would you like me to provide more details about any specific component or phase of the implementation plan?
