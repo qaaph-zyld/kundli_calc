@@ -23,7 +23,11 @@ const ChartCalculator: React.FC = () => {
           </h2>
           {loading && (
             <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+              <div 
+                role="status"
+                className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"
+                aria-label="Loading chart"
+              />
             </div>
           )}
           {error && (

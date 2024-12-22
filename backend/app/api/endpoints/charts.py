@@ -4,7 +4,7 @@ from typing import Optional
 
 from ...core.calculations.astronomical import AstronomicalCalculator, Location
 from ...core.calculations.houses import HouseCalculator
-from ...core.calculations.aspects import AspectCalculator
+from ...core.calculations.aspects import EnhancedAspectCalculator as AspectCalculator
 from ...core.calculations.nakshatra import NakshatraCalculator
 from ...core.models.chart import BirthChart, Location as LocationModel
 from ...core.cache import RedisCache
