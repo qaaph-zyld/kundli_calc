@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from .api.endpoints import charts, health, birth_charts
+from .api.endpoints import charts, health, birth_charts, horoscope
 from .core.config import settings
 
 app = FastAPI(
@@ -34,6 +34,12 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(
+    horoscope.router,
+    prefix="/api",
+    tags=["horoscope"]
+)
+
 app.include_router(
     charts.router,
     prefix="/api/v1/charts",
@@ -85,6 +91,10 @@ def custom_openapi():
         {
             "name": "health",
             "description": "API health check endpoints"
+        },
+        {
+            "name": "horoscope",
+            "description": "Operations for calculating and retrieving horoscopes"
         }
     ]
     

@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import Mock, patch
 import sys
+from datetime import datetime
+from decimal import Decimal
 
 # Mock dependencies that require C extensions
 mock_swe = Mock()
@@ -29,38 +31,37 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from app.core.database import get_db
+from app.core.models.chart import Location
 
-# Test database URL
+# Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 @pytest.fixture
 def test_db():
     Base.metadata.create_all(bind=engine)
-    def override_get_db():
-        try:
-            db = TestingSessionLocal()
-            yield db
-        finally:
-            db.close()
-    app.dependency_overrides[get_db] = override_get_db
-    yield engine
-    Base.metadata.drop_all(bind=engine)
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture
 def client(test_db):
-    with TestClient(app) as test_client:
-        yield test_client
+    def override_get_db():
+        try:
+            yield test_db
+        finally:
+            test_db.close()
+    app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)
 
 @pytest.fixture
 def test_location():
-    return {"latitude": 13.0827, "longitude": 80.2707}  # Chennai coordinates
+    return Location(latitude=Decimal('28.6139'), longitude=Decimal('77.2090'), altitude=Decimal('0'))
 
 @pytest.fixture
 def test_date():
-    from datetime import datetime
-    return datetime(2024, 1, 1, 12, 0)
+    return datetime(2024, 1, 1, 12, 0, 0)

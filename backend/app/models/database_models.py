@@ -1,5 +1,4 @@
 from sqlalchemy import Column, Integer, String, DateTime, Float, JSON, ForeignKey, Boolean
-from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from datetime import datetime
 
@@ -8,7 +7,7 @@ from ..core.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
@@ -18,8 +17,8 @@ class User(Base):
 class BirthChart(Base):
     __tablename__ = "birth_charts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     
     # Birth Details
     name = Column(String, nullable=True)

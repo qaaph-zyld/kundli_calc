@@ -1,5 +1,6 @@
 from typing import Dict, Tuple
 import math
+from decimal import Decimal
 
 class NakshatraCalculator:
     NAKSHATRAS = [
@@ -18,17 +19,17 @@ class NakshatraCalculator:
     ]
     
     @staticmethod
-    def calculate_nakshatra(longitude: float) -> Dict[str, any]:
+    def calculate_nakshatra(longitude: Decimal) -> Dict[str, any]:
         """Calculate nakshatra details for given longitude."""
         # Each nakshatra is 13°20' (13.33333... degrees)
-        nakshatra_length = 360 / 27
+        nakshatra_length = Decimal('360') / Decimal('27')
         
         # Calculate nakshatra number (0-26)
-        nakshatra_num = math.floor(longitude / nakshatra_length)
+        nakshatra_num = int(longitude / nakshatra_length)
         
         # Calculate pada (quarter) within nakshatra
         position_in_nakshatra = longitude % nakshatra_length
-        pada = math.floor(position_in_nakshatra / (nakshatra_length / 4)) + 1
+        pada = int(position_in_nakshatra / (nakshatra_length / Decimal('4'))) + 1
         
         # Calculate degrees traversed in nakshatra
         degrees_traversed = position_in_nakshatra
@@ -38,13 +39,13 @@ class NakshatraCalculator:
             "name": NakshatraCalculator.NAKSHATRAS[nakshatra_num],
             "lord": NakshatraCalculator.NAKSHATRA_LORDS[nakshatra_num],
             "pada": pada,
-            "degrees_traversed": round(degrees_traversed, 2),
-            "total_degrees": round(nakshatra_length, 2)
+            "degrees_traversed": round(float(degrees_traversed), 2),
+            "total_degrees": round(float(nakshatra_length), 2)
         }
     
     @staticmethod
     def calculate_all_nakshatras(
-        planetary_positions: Dict[str, Dict[str, float]]
+        planetary_positions: Dict[str, Dict[str, Decimal]]
     ) -> Dict[str, Dict]:
         """Calculate nakshatras for all planets."""
         return {

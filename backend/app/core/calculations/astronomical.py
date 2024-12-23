@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Any, Optional
 import swisseph as swe
+import logging
 
 @dataclass
 class Location:
@@ -35,11 +36,6 @@ class DataProcessor:
             'relative_speed': DataProcessor._apply_precision_rules(abs(speed) / 1)  # Normalized to average speed
         }
 
-    @staticmethod
-    def _normalize_distance(distance: float) -> float:
-        """Normalize distance values"""
-        return DataProcessor._apply_precision_rules(distance, 'distance')
-
     @classmethod
     def process_planetary_data(cls, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process raw planetary data with precision rules"""
@@ -47,98 +43,103 @@ class DataProcessor:
             'longitude': cls._apply_precision_rules(raw_data['longitude']),
             'latitude': cls._apply_precision_rules(raw_data['latitude']),
             'speed': cls._calculate_speed_metrics(raw_data['speed']),
-            'distance': cls._normalize_distance(raw_data['distance'])
+            'distance': cls._apply_precision_rules(raw_data['distance'], 'distance')
         }
 
 class AstronomicalCalculator:
-    def __init__(self, ayanamsa: int = swe.SIDM_LAHIRI):
-        self.ayanamsa = ayanamsa
-        self.ephemeris_config = {
-            'precision_level': swe.SEFLG_SPEED | swe.SEFLG_TOPOCTR,
-            'calculation_mode': swe.SEFLG_SIDEREAL,
-            'coordinate_system': swe.SEFLG_EQUATORIAL,
-            'error_handling': swe.SEFLG_NOGDEFL
+    def __init__(self, ayanamsa: Optional[int] = 1):
+        """Initialize the astronomical calculator with default settings"""
+        self.advanced_settings = {
+            'topocentric': True,  # Enable topocentric calculations by default
+            'true_node': True,    # Use true node instead of mean node
+            'precision': 6        # Decimal places for precision
         }
         
-        # Advanced configuration options
-        self.advanced_settings = {
-            'delta_t_auto': True,
-            'true_node': True,
-            'speed_calc': True,
-            'topocentric': True
+        self.ephemeris_config = {
+            'precision_level': 2 | 256 | 32768,
+            'calculation_mode': 64,
+            'coordinate_system': 2048,
+            'error_handling': 128
         }
+        
+        self.planet_map = {
+            swe.SUN: 'Sun',
+            swe.MOON: 'Moon',
+            swe.MARS: 'Mars',
+            swe.MERCURY: 'Mercury',
+            swe.JUPITER: 'Jupiter',
+            swe.VENUS: 'Venus',
+            swe.SATURN: 'Saturn',
+            swe.TRUE_NODE: 'Rahu',
+            -1: 'Ketu'
+        }
+        
+        self.logger = logging.getLogger(__name__)
+        self.ayanamsa = ayanamsa
         
         self._configure_ephemeris()
     
     def _configure_ephemeris(self):
         """Configure Swiss Ephemeris with advanced settings"""
         swe.set_sid_mode(self.ayanamsa)
-        if self.advanced_settings['delta_t_auto']:
-            swe.set_delta_t_userdef(0)  # Use automatic Delta T
-        
-        # Set ephemeris path if needed
-        # swe.set_ephe_path()
+        swe.set_delta_t_userdef(0)  # Use automatic Delta T
     
-    def calculate_planetary_positions(
-        self, 
-        datetime_utc: datetime,
-        location: Location
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Calculate planetary positions with enhanced precision and additional metrics
-        """
-        julian_day = swe.julday(
-            datetime_utc.year,
-            datetime_utc.month,
-            datetime_utc.day,
-            datetime_utc.hour + datetime_utc.minute/60.0 + datetime_utc.second/3600.0
+    def _to_julian_day(self, date: datetime) -> float:
+        """Calculate Julian Day from datetime"""
+        return swe.julday(
+            date.year,
+            date.month,
+            date.day,
+            date.hour + date.minute/60.0 + date.second/3600.0
         )
-        
-        # Set geographical location for topocentric calculations
-        if self.advanced_settings['topocentric']:
-            swe.set_topo(location.longitude, location.latitude, location.altitude)
-        
-        planets = {
-            'Sun': swe.SUN,
-            'Moon': swe.MOON,
-            'Mars': swe.MARS,
-            'Mercury': swe.MERCURY,
-            'Jupiter': swe.JUPITER,
-            'Venus': swe.VENUS,
-            'Saturn': swe.SATURN,
-            'Rahu': swe.TRUE_NODE if self.advanced_settings['true_node'] else swe.MEAN_NODE,
-            'Ketu': None  # South Node (calculated from Rahu)
-        }
+
+    def calculate_planetary_positions(self, date: datetime, location: Location) -> Dict[str, Dict[str, float]]:
+        """Calculate planetary positions for a given date and location"""
+        jd = self._to_julian_day(date)
+        swe.set_topo(float(location.latitude), float(location.longitude), float(location.altitude))
         
         positions = {}
-        for planet, planet_id in planets.items():
-            if planet == 'Ketu':
-                # Ketu is exactly opposite to Rahu
-                rahu_pos = positions['Rahu']['longitude']
-                ketu_pos = (rahu_pos + 180) % 360
-                positions['Ketu'] = DataProcessor.process_planetary_data({
-                    'longitude': ketu_pos,
-                    'latitude': -positions['Rahu']['latitude'],
-                    'distance': positions['Rahu']['distance'],
-                    'speed': -positions['Rahu']['speed']['degrees_per_day']
-                })
-                continue
+        for planet_id, planet_name in self.planet_map.items():
+            try:
+                # Calculate flags
+                flags = 2  # FLG_SWIEPH
+                flags |= 256  # FLG_SPEED
+                flags |= 32768  # FLG_TOPOCTR
+                flags |= 64  # FLG_SIDEREAL
+                flags |= 2048  # FLG_EQUATORIAL
+                flags |= 128  # FLG_NOGDEFL
                 
-            flags = (
-                self.ephemeris_config['precision_level'] |
-                self.ephemeris_config['calculation_mode'] |
-                self.ephemeris_config['error_handling']
-            )
-            
-            result = swe.calc_ut(julian_day, planet_id, flags)
-            
-            raw_data = {
-                'longitude': result[0][0],
-                'latitude': result[0][1],
-                'distance': result[0][2],
-                'speed': result[0][3]
-            }
-            
-            positions[planet] = DataProcessor.process_planetary_data(raw_data)
+                result, status = swe.calc_ut(jd, planet_id, flags)
+                
+                if isinstance(result, (list, tuple)) and len(result) >= 4:
+                    positions[planet_name] = {
+                        'longitude': float(result[0]),
+                        'latitude': float(result[1]),
+                        'distance': float(result[2]),
+                        'speed': {
+                            'degrees_per_day': float(result[3]),
+                            'is_retrograde': float(result[3]) < 0,
+                            'relative_speed': abs(float(result[3]) / 1)
+                        }
+                    }
+                    
+                    # Round all values to 6 decimal places
+                    positions[planet_name]['longitude'] = round(positions[planet_name]['longitude'], 6)
+                    positions[planet_name]['latitude'] = round(positions[planet_name]['latitude'], 6)
+                    positions[planet_name]['distance'] = round(positions[planet_name]['distance'], 6)
+                    positions[planet_name]['speed']['degrees_per_day'] = round(positions[planet_name]['speed']['degrees_per_day'], 6)
+                    positions[planet_name]['speed']['relative_speed'] = round(positions[planet_name]['speed']['relative_speed'], 6)
+            except Exception as e:
+                self.logger.error(f"Error calculating position for {planet_name}: {str(e)}")
+                positions[planet_name] = {
+                    'longitude': 0.0,
+                    'latitude': 0.0,
+                    'distance': 0.0,
+                    'speed': {
+                        'degrees_per_day': 0.0,
+                        'is_retrograde': False,
+                        'relative_speed': 0.0
+                    }
+                }
         
         return positions

@@ -1,5 +1,6 @@
 from datetime import datetime
 import swisseph as swe
+from decimal import Decimal
 from .astronomical import Location
 
 class HouseCalculator:
@@ -32,17 +33,17 @@ class HouseCalculator:
         # Calculate houses
         houses = swe.houses(
             julian_day,
-            location.latitude,
-            location.longitude,
+            float(location.latitude),
+            float(location.longitude),
             bytes(self.house_system, 'utf-8')
         )
         
-        # Extract house cusps and angles
-        house_cusps = list(houses[0])  # Convert from tuple to list
-        ascendant = houses[1][0]  # Ascendant
-        midheaven = houses[1][1]  # Midheaven (MC)
-        armc = houses[1][2]  # ARMC
-        vertex = houses[1][3]  # Vertex
+        # Extract house cusps and angles and convert to Decimal
+        house_cusps = [Decimal(str(cusp)) for cusp in houses[0]]
+        ascendant = Decimal(str(houses[1][0]))  # Ascendant
+        midheaven = Decimal(str(houses[1][1]))  # Midheaven (MC)
+        armc = Decimal(str(houses[1][2]))  # ARMC
+        vertex = Decimal(str(houses[1][3]))  # Vertex
         
         return {
             'cusps': house_cusps,

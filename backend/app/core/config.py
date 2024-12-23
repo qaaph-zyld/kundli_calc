@@ -1,9 +1,13 @@
 from pydantic_settings import BaseSettings
-from pydantic import PostgresDsn, validator
+from pydantic import PostgresDsn, field_validator
 from typing import List, Optional
 import os
 
 class Settings(BaseSettings):
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+    
     # Application Settings
     APP_NAME: str = "kundli-calculator"
     APP_ENV: str = "development"
@@ -38,7 +42,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
-    @validator("DATABASE_URL", pre=True)
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
     def validate_database_url(cls, v: Optional[str]) -> Optional[str]:
         if not v:
             return str(PostgresDsn.build(
@@ -50,8 +55,5 @@ class Settings(BaseSettings):
                 path="/kundli_db",
             ))
         return v
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

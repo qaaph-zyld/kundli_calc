@@ -1,109 +1,145 @@
 import pytest
 from app.core.calculations.divisional import EnhancedDivisionalChartEngine
 
-@pytest.fixture
-def divisional_engine():
-    return EnhancedDivisionalChartEngine()
+def test_divisional_chart_engine_initialization():
+    engine = EnhancedDivisionalChartEngine()
+    assert engine is not None
+    assert hasattr(engine, 'zodiac_signs')
+    assert hasattr(engine, 'special_divisions')
+    assert len(engine.zodiac_signs) == 12
 
-class TestDivisionalCalculations:
-    def test_d1_chart(self, divisional_engine):
-        """Test D1 (Rashi) chart calculation"""
-        longitude = 45.5  # In Taurus
-        divisions = ['D1']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        assert 'D1' in result
-        assert 30 <= result['D1'] < 60  # Should be in Taurus (30-60 degrees)
-        assert abs(result['D1'] - longitude) < 0.000001
+def test_longitude_normalization():
+    engine = EnhancedDivisionalChartEngine()
+    test_cases = [
+        (370.5, 10.5),    # > 360
+        (-30.5, 329.5),   # Negative
+        (360.0, 0.0),     # Exactly 360
+        (180.5, 180.5),   # Normal case
+        (720.5, 0.5)      # Multiple of 360
+    ]
     
-    def test_d9_chart(self, divisional_engine):
-        """Test D9 (Navamsa) chart calculation"""
-        longitude = 45.5  # In Taurus
-        divisions = ['D9']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        assert 'D9' in result
-        assert 0 <= result['D9'] < 360
-        # Verify correct navamsa calculation
-        expected_navamsa = ((45.5 % 30) * 9 / 30 + 120) % 360  # Formula for Taurus
-        assert abs(result['D9'] - expected_navamsa) < 0.000001
+    for input_value, expected in test_cases:
+        result = engine._normalize_longitude(input_value)
+        assert abs(result - expected) < 0.000001
+
+def test_sign_calculation():
+    engine = EnhancedDivisionalChartEngine()
+    test_cases = [
+        (15.5, 0),    # Aries
+        (45.5, 1),    # Taurus
+        (75.5, 2),    # Gemini
+        (105.5, 3),   # Cancer
+        (360.0, 0)    # Full circle
+    ]
     
-    def test_d12_chart(self, divisional_engine):
-        """Test D12 (Dwadasamsa) chart calculation"""
-        longitude = 45.5  # In Taurus
-        divisions = ['D12']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        assert 'D12' in result
-        assert 0 <= result['D12'] < 360
-        # Verify correct dwadasamsa calculation
-        expected_d12 = ((45.5 % 30) * 12 / 30 + 30) % 360  # Formula for Taurus
-        assert abs(result['D12'] - expected_d12) < 0.000001
+    for longitude, expected_sign in test_cases:
+        result = engine._get_sign_from_longitude(longitude)
+        assert result == expected_sign
+
+def test_navamsa_calculation():
+    engine = EnhancedDivisionalChartEngine()
     
-    def test_d30_chart(self, divisional_engine):
-        """Test D30 (Trimshamsa) chart calculation"""
-        longitude = 45.5  # In Taurus
-        divisions = ['D30']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        assert 'D30' in result
-        assert 0 <= result['D30'] < 360
+    # Test cases for different elements
+    test_cases = [
+        (15.0, 135.0),    # Fire sign (Aries) -> 15° in Aries -> Taurus navamsa
+        (45.0, 225.0),    # Earth sign (Taurus) -> 15° in Taurus -> Leo navamsa
+        (75.0, 315.0),    # Air sign (Gemini) -> 15° in Gemini -> Scorpio navamsa
+        (105.0, 45.0)     # Water sign (Cancer) -> 15° in Cancer -> Aquarius navamsa
+    ]
     
-    def test_multiple_divisions(self, divisional_engine):
-        """Test calculation of multiple divisional charts"""
-        longitude = 45.5
-        divisions = ['D1', 'D9', 'D12', 'D30']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        assert all(div in result for div in divisions)
-        assert all(0 <= result[div] < 360 for div in divisions)
+    for input_long, expected_nav in test_cases:
+        result = engine._calculate_navamsa(input_long)
+        assert abs(result - expected_nav) < 0.000001
+
+def test_dwadasamsa_calculation():
+    engine = EnhancedDivisionalChartEngine()
     
-    def test_invalid_division(self, divisional_engine):
-        """Test handling of invalid division request"""
-        longitude = 45.5
-        divisions = ['D1', 'InvalidDiv']
+    # Test cases for D12
+    test_cases = [
+        (15.0, 180.0),    # First dwadasamsa in Aries -> moves to Virgo
+        (45.0, 210.0),    # First dwadasamsa in Taurus -> moves to Libra
+        (75.0, 240.0),    # First dwadasamsa in Gemini -> moves to Scorpio
+        (105.0, 270.0)    # First dwadasamsa in Cancer -> moves to Sagittarius
+    ]
+    
+    for input_long, expected_d12 in test_cases:
+        result = engine._calculate_dwadasamsa(input_long)
+        assert abs(result - expected_d12) < 0.000001
+
+def test_trimsamsa_calculation():
+    engine = EnhancedDivisionalChartEngine()
+    
+    # Test odd and even signs
+    odd_sign_long = 15.0  # Aries (odd)
+    even_sign_long = 45.0  # Taurus (even)
+    
+    odd_result = engine._calculate_trimsamsa(odd_sign_long)
+    even_result = engine._calculate_trimsamsa(even_sign_long)
+    
+    # Results should be different for odd and even signs
+    assert odd_result != even_result
+    
+    # Results should be within valid range
+    assert 0 <= odd_result < 360
+    assert 0 <= even_result < 360
+
+def test_divisional_chart_calculation():
+    engine = EnhancedDivisionalChartEngine()
+    
+    # Test planetary positions
+    test_positions = {
+        'Sun': 45.5,
+        'Moon': 120.5,
+        'Mars': 200.5,
+        'Mercury': 300.5
+    }
+    
+    # Test different divisions
+    divisions = [1, 2, 3, 4, 7, 9, 12, 16, 20, 24, 27, 30, 40]
+    
+    for division in divisions:
+        result = engine.calculate_divisional_chart(test_positions, division)
         
+        # Verify results
+        assert isinstance(result, dict)
+        assert len(result) == len(test_positions)
+        
+        # Check value ranges
+        for planet, position in result.items():
+            assert 0 <= position < 360
+            assert isinstance(position, float)
+
+def test_special_divisional_charts():
+    engine = EnhancedDivisionalChartEngine()
+    test_positions = {
+        'Sun': 45.5,
+        'Moon': 120.5
+    }
+    
+    # Test D9, D12, and D30 with special rules
+    special_divisions = [9, 12, 30]
+    
+    for division in special_divisions:
+        # Test with special rules
+        with_rules = engine.calculate_divisional_chart(
+            test_positions, division, apply_special_rules=True
+        )
+        
+        # Test without special rules
+        without_rules = engine.calculate_divisional_chart(
+            test_positions, division, apply_special_rules=False
+        )
+        
+        # Results should be different when using special rules
+        assert with_rules != without_rules
+
+def test_invalid_division():
+    engine = EnhancedDivisionalChartEngine()
+    test_positions = {'Sun': 45.5}
+    
+    # Test invalid division numbers
+    invalid_divisions = [0, -1, 41, 100]
+    
+    for division in invalid_divisions:
         with pytest.raises(ValueError):
-            divisional_engine.calculate_all_divisions(longitude, divisions)
-    
-    def test_boundary_conditions(self, divisional_engine):
-        """Test calculations at zodiac boundaries"""
-        # Test at 0 degrees (Aries starting point)
-        result_start = divisional_engine.calculate_all_divisions(0, ['D1', 'D9'])
-        assert result_start['D1'] == 0
-        assert result_start['D9'] == 0
-        
-        # Test at 359.99... degrees (end of Pisces)
-        result_end = divisional_engine.calculate_all_divisions(359.99999, ['D1', 'D9'])
-        assert 359 <= result_end['D1'] < 360
-        assert 0 <= result_end['D9'] < 360
-    
-    def test_special_divisional_rules(self, divisional_engine):
-        """Test special rules for divisional charts"""
-        # Test odd sign special rule for D9
-        leo_long = 135.5  # In Leo (odd sign)
-        result_leo = divisional_engine.calculate_all_divisions(leo_long, ['D9'])
-        
-        # Test even sign special rule for D9
-        virgo_long = 155.5  # In Virgo (even sign)
-        result_virgo = divisional_engine.calculate_all_divisions(virgo_long, ['D9'])
-        
-        assert result_leo['D9'] != result_virgo['D9']
-    
-    def test_pada_calculation(self, divisional_engine):
-        """Test pada (quarter) calculations"""
-        longitude = 45.5  # In Taurus
-        result = divisional_engine.calculate_pada(longitude)
-        
-        assert 1 <= result <= 4  # Pada should be between 1 and 4
-    
-    def test_precision_maintenance(self, divisional_engine):
-        """Test precision maintenance in calculations"""
-        longitude = 45.5432198  # High precision input
-        divisions = ['D1', 'D9', 'D12']
-        result = divisional_engine.calculate_all_divisions(longitude, divisions)
-        
-        # Verify precision is maintained
-        for div in divisions:
-            decimal_str = str(result[div] - int(result[div]))[2:]
-            assert len(decimal_str) >= 6  # Should maintain at least 6 decimal places
+            engine.calculate_divisional_chart(test_positions, division)
