@@ -76,15 +76,21 @@ def test_calculate_chart(client: TestClient, mocker):
         }
 
     mocker.patch('app.core.calculations.houses.HouseCalculator.calculate_houses', side_effect=mock_calculate_houses)
+        
+    # Mock ayanamsa value
+    mocker.patch('app.core.calculations.astronomical.AstronomicalCalculator.get_ayanamsa_value', return_value=Decimal('24.0'))
+        
+    # Mock swisseph.get_ayanamsa_ut
+    mocker.patch('swisseph.get_ayanamsa_ut', return_value=24.0)
 
     response = client.post(
         "/api/v1/charts/calculate",
-        json={
+        params={
             "date_time": "2024-01-01T12:00:00Z",
-            "latitude": 13.0827,
-            "longitude": 80.2707,
-            "altitude": 0,
-            "ayanamsa": 1,
+            "latitude": "13.0827",
+            "longitude": "80.2707",
+            "altitude": "0",
+            "ayanamsa": "1",
             "house_system": "P"
         }
     )
@@ -97,12 +103,12 @@ def test_calculate_chart(client: TestClient, mocker):
 def test_invalid_coordinates(client: TestClient):
     response = client.post(
         "/api/v1/charts/calculate",
-        json={
+        params={
             "date_time": "2024-01-01T12:00:00Z",
-            "latitude": 91,  # Invalid latitude
-            "longitude": 80.2707,
-            "altitude": 0,
-            "ayanamsa": 1,
+            "latitude": "91",  # Invalid latitude
+            "longitude": "80.2707",
+            "altitude": "0",
+            "ayanamsa": "1",
             "house_system": "P"
         }
     )

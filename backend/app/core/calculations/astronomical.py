@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 import swisseph as swe
 import logging
+from decimal import Decimal
 
 @dataclass
 class Location:
@@ -92,6 +93,19 @@ class AstronomicalCalculator:
             date.day,
             date.hour + date.minute/60.0 + date.second/3600.0
         )
+
+    def get_ayanamsa_value(self, datetime_utc: datetime) -> Decimal:
+        """Get the ayanamsa value for a given date and time.
+
+        Args:
+            datetime_utc: The date and time in UTC.
+
+        Returns:
+            The ayanamsa value in degrees.
+        """
+        jd = self._to_julian_day(datetime_utc)
+        ayanamsa = swe.get_ayanamsa_ut(jd)
+        return Decimal(str(ayanamsa))
 
     def calculate_planetary_positions(self, date: datetime, location: Location) -> Dict[str, Dict[str, float]]:
         """Calculate planetary positions for a given date and location"""
