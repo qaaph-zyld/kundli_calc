@@ -235,3 +235,108 @@ def test_horoscope_divisional_charts(mock_calculation_engines):
     d9_chart = data["divisional_charts"]["D9"]
     assert isinstance(d9_chart, dict)
     assert len(d9_chart) > 0
+
+def test_horoscope_complete_workflow(mock_calculation_engines):
+    """Test complete horoscope calculation workflow with all features."""
+    test_data = {
+        "datetime_utc": "2024-01-01T12:00:00",
+        "latitude": 28.6139,
+        "longitude": 77.2090,
+        "altitude": 0,
+        "ayanamsa_system": "LAHIRI",
+        "house_system": "P",
+        "divisional_charts": ["D1", "D9", "D12"]
+    }
+    
+    response = client.post("/api/v1/horoscope/calculate", json=test_data)
+    assert response.status_code == 200
+    
+    data = response.json()
+    
+    # Verify planetary positions
+    assert "planetary_positions" in data
+    for planet, pos in data["planetary_positions"].items():
+        assert "longitude" in pos
+        assert "latitude" in pos
+        assert "speed" in pos
+        assert "distance" in pos
+    
+    # Verify planetary strengths
+    assert "planetary_strengths" in data
+    for planet, strength in data["planetary_strengths"].items():
+        assert "shadbala" in strength
+        assert "dignity_score" in strength
+        assert "positional_strength" in strength
+        assert "temporal_strength" in strength
+        assert "aspect_strength" in strength
+        assert "total_strength" in strength
+        assert 0 <= float(strength["total_strength"]) <= 100
+    
+    # Verify aspects
+    assert "aspects" in data
+    for aspect in data["aspects"]:
+        assert "aspect_type" in aspect
+        assert "strength" in aspect
+        assert "is_beneficial" in aspect
+        assert 0 <= float(aspect["strength"]) <= 1
+    
+    # Verify divisional charts
+    assert "divisional_charts" in data
+    for chart_type, chart in data["divisional_charts"].items():
+        assert "division" in chart
+        assert "planetary_positions" in chart
+        assert "house_cusps" in chart
+        assert "special_points" in chart
+
+def test_horoscope_performance(mock_calculation_engines):
+    """Test performance of horoscope calculations."""
+    import time
+    
+    test_data = {
+        "datetime_utc": "2024-01-01T12:00:00",
+        "latitude": 28.6139,
+        "longitude": 77.2090,
+        "altitude": 0,
+        "ayanamsa_system": "LAHIRI"
+    }
+    
+    start_time = time.time()
+    response = client.post("/api/v1/horoscope/calculate", json=test_data)
+    end_time = time.time()
+    
+    assert response.status_code == 200
+    assert end_time - start_time < 2.0  # Should complete within 2 seconds
+
+def test_horoscope_error_handling():
+    """Test comprehensive error handling scenarios."""
+    # Test invalid date format
+    response = client.post("/api/v1/horoscope/calculate", json={
+        "datetime_utc": "invalid_date",
+        "latitude": 28.6139,
+        "longitude": 77.2090
+    })
+    assert response.status_code == 422
+    
+    # Test out of range coordinates
+    response = client.post("/api/v1/horoscope/calculate", json={
+        "datetime_utc": "2024-01-01T12:00:00",
+        "latitude": 91.0,  # Invalid latitude
+        "longitude": 77.2090
+    })
+    assert response.status_code == 422
+    
+    # Test missing required fields
+    response = client.post("/api/v1/horoscope/calculate", json={
+        "latitude": 28.6139,
+        "longitude": 77.2090
+    })
+    assert response.status_code == 422
+    
+    # Test invalid ayanamsa system
+    response = client.post("/api/v1/horoscope/calculate", json={
+        "datetime_utc": "2024-01-01T12:00:00",
+        "latitude": 28.6139,
+        "longitude": 77.2090,
+        "ayanamsa_system": "INVALID"
+    })
+    assert response.status_code == 422

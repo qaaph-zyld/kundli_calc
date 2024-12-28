@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator, ConfigDict
 from app.core.calculations.astronomical import AstronomicalCalculator, Location
@@ -8,6 +8,7 @@ from app.core.calculations.divisional import EnhancedDivisionalChartEngine
 from app.core.calculations.strength import EnhancedPlanetaryStrengthEngine
 from app.core.calculations.aspects import EnhancedAspectCalculator
 from app.core.calculations.house_analysis import EnhancedHouseAnalysisEngine
+from app.core.parallel import batch_processor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -165,4 +166,43 @@ async def calculate_horoscope(request: HoroscopeRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
+        )
+
+@router.post("/batch_calculations")
+async def batch_calculations(
+    start_date: datetime,
+    end_date: datetime,
+    location: Location,
+    calculation_type: str = "planetary_positions"
+) -> List[Dict[str, Any]]:
+    """
+    Calculate horoscope data for a range of dates in parallel.
+    
+    Args:
+        start_date: Start date for calculations
+        end_date: End date for calculations
+        location: Location for calculations
+        calculation_type: Type of calculation ("planetary_positions" or "house_cusps")
+        
+    Returns:
+        List of calculation results for each date
+    """
+    try:
+        results = batch_processor.process_date_range(
+            start_date,
+            end_date,
+            location,
+            calculation_type
+        )
+        return results
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error in batch calculations: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during batch calculations"
         )

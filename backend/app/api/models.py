@@ -84,6 +84,29 @@ class Aspect(BaseModel):
     orb: Decimal = Field(..., description="Orb in degrees")
     exact_degree: Decimal = Field(..., description="Exact aspect degree")
 
+class PlanetaryStrength(BaseModel):
+    """Model for planetary strength calculations."""
+    shadbala: Decimal = Field(..., description="Shadbala strength")
+    dignity_score: Decimal = Field(..., description="Dignity-based strength")
+    positional_strength: Decimal = Field(..., description="Positional strength")
+    temporal_strength: Decimal = Field(..., description="Temporal strength")
+    aspect_strength: Decimal = Field(..., description="Aspect-based strength")
+    total_strength: Decimal = Field(..., description="Total calculated strength")
+
+class AspectInfluence(BaseModel):
+    """Model for detailed aspect analysis."""
+    aspect_type: str = Field(..., description="Type of aspect (e.g., conjunction, trine)")
+    strength: Decimal = Field(..., description="Strength of the aspect")
+    is_beneficial: bool = Field(..., description="Whether the aspect is beneficial")
+    special_effects: Optional[List[str]] = Field(default=None, description="Special effects of the aspect")
+
+class DivisionalChart(BaseModel):
+    """Model for divisional chart data."""
+    division: int = Field(..., description="Chart division (1 for D1, 9 for D9, etc.)")
+    planetary_positions: Dict[str, PlanetaryPosition] = Field(..., description="Planetary positions in this division")
+    house_cusps: List[Decimal] = Field(..., description="House cusps in this division")
+    special_points: Dict[str, Decimal] = Field(..., description="Special points in this division")
+
 class ChartResponse(BaseModel):
     """Response model for birth chart calculation."""
     model_config = ConfigDict(from_attributes=True)
@@ -93,11 +116,19 @@ class ChartResponse(BaseModel):
         description="Positions of all planets"
     )
     houses: House = Field(..., description="House system data")
-    aspects: List[Aspect] = Field(
+    aspects: List[AspectInfluence] = Field(
         default_factory=list,
-        description="Planetary aspects"
+        description="Detailed planetary aspects"
     )
     ayanamsa_value: Decimal = Field(
         ...,
-        description="Ayanamsa value used in calculations"
+        description="Calculated ayanamsa value"
+    )
+    planetary_strengths: Dict[str, PlanetaryStrength] = Field(
+        ...,
+        description="Detailed strength calculations for each planet"
+    )
+    divisional_charts: Dict[str, DivisionalChart] = Field(
+        ...,
+        description="Calculated divisional charts"
     )

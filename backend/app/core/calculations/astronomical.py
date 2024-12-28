@@ -1,92 +1,39 @@
-from dataclasses import dataclass
+"""Astronomical calculations module."""
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, List, Optional, Tuple
 import swisseph as swe
-import logging
-from decimal import Decimal
+from app.core.cache.calculation_cache import CalculationCache
+from app.core.config.settings import settings
+from app.models.enums import Planet, House, Aspect
+from app.models.location import Location
 
-@dataclass
-class Location:
-    latitude: float
-    longitude: float
-    altitude: float = 0
-
-class DataProcessor:
-    @staticmethod
-    def _apply_precision_rules(value: float, precision_type: str = 'coordinate') -> float:
-        """
-        Implements Swiss Ephemeris precision standards:
-        - Arc second precision for coordinates (6 decimal places)
-        - Microsecond precision for time (6 decimal places)
-        - Distance precision to 8 decimal places
-        """
-        if precision_type == 'coordinate':
-            return round(value, 6)  # Arc second precision
-        elif precision_type == 'time':
-            return round(value, 6)  # Microsecond precision
-        elif precision_type == 'distance':
-            return round(value, 8)  # Distance precision
-        return value
-
-    @staticmethod
-    def _calculate_speed_metrics(speed: float) -> Dict[str, float]:
-        """Calculate detailed speed metrics"""
-        return {
-            'degrees_per_day': DataProcessor._apply_precision_rules(speed),
-            'is_retrograde': speed < 0,
-            'relative_speed': DataProcessor._apply_precision_rules(abs(speed) / 1)  # Normalized to average speed
-        }
-
-    @classmethod
-    def process_planetary_data(cls, raw_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process raw planetary data with precision rules"""
-        return {
-            'longitude': cls._apply_precision_rules(raw_data['longitude']),
-            'latitude': cls._apply_precision_rules(raw_data['latitude']),
-            'speed': cls._calculate_speed_metrics(raw_data['speed']),
-            'distance': cls._apply_precision_rules(raw_data['distance'], 'distance')
-        }
 
 class AstronomicalCalculator:
-    def __init__(self, ayanamsa: Optional[int] = 1):
-        """Initialize the astronomical calculator with default settings"""
-        self.advanced_settings = {
-            'topocentric': True,  # Enable topocentric calculations by default
-            'true_node': True,    # Use true node instead of mean node
-            'precision': 6        # Decimal places for precision
+    """Astronomical calculator using Swiss Ephemeris."""
+
+    def __init__(self):
+        """Initialize calculator with Swiss Ephemeris path and cache."""
+        # Set ephemeris path
+        swe.set_ephe_path(settings.EPHEMERIS_PATH)
+        
+        # Initialize cache with reasonable size limits
+        self._cache = CalculationCache(max_size=500)
+        
+        # Map planet enums to Swiss Ephemeris constants
+        self._planet_map = {
+            Planet.SUN: swe.SUN,
+            Planet.MOON: swe.MOON,
+            Planet.MARS: swe.MARS,
+            Planet.MERCURY: swe.MERCURY,
+            Planet.JUPITER: swe.JUPITER,
+            Planet.VENUS: swe.VENUS,
+            Planet.SATURN: swe.SATURN,
+            Planet.RAHU: swe.MEAN_NODE,  # Using mean node for Rahu
+            Planet.KETU: swe.MEAN_NODE,  # Will calculate Ketu from Rahu
         }
-        
-        self.ephemeris_config = {
-            'precision_level': 2 | 256 | 32768,
-            'calculation_mode': 64,
-            'coordinate_system': 2048,
-            'error_handling': 128
-        }
-        
-        self.planet_map = {
-            swe.SUN: 'Sun',
-            swe.MOON: 'Moon',
-            swe.MARS: 'Mars',
-            swe.MERCURY: 'Mercury',
-            swe.JUPITER: 'Jupiter',
-            swe.VENUS: 'Venus',
-            swe.SATURN: 'Saturn',
-            swe.TRUE_NODE: 'Rahu',
-            -1: 'Ketu'
-        }
-        
-        self.logger = logging.getLogger(__name__)
-        self.ayanamsa = ayanamsa
-        
-        self._configure_ephemeris()
-    
-    def _configure_ephemeris(self):
-        """Configure Swiss Ephemeris with advanced settings"""
-        swe.set_sid_mode(self.ayanamsa)
-        swe.set_delta_t_userdef(0)  # Use automatic Delta T
-    
-    def _to_julian_day(self, date: datetime) -> float:
-        """Calculate Julian Day from datetime"""
+
+    def _julian_day(self, date: datetime) -> float:
+        """Convert datetime to Julian day."""
         return swe.julday(
             date.year,
             date.month,
@@ -94,66 +41,148 @@ class AstronomicalCalculator:
             date.hour + date.minute/60.0 + date.second/3600.0
         )
 
-    def get_ayanamsa_value(self, datetime_utc: datetime) -> Decimal:
-        """Get the ayanamsa value for a given date and time.
-
-        Args:
-            datetime_utc: The date and time in UTC.
-
-        Returns:
-            The ayanamsa value in degrees.
-        """
-        jd = self._to_julian_day(datetime_utc)
-        ayanamsa = swe.get_ayanamsa_ut(jd)
-        return Decimal(str(ayanamsa))
-
-    def calculate_planetary_positions(self, date: datetime, location: Location) -> Dict[str, Dict[str, float]]:
-        """Calculate planetary positions for a given date and location"""
-        jd = self._to_julian_day(date)
-        swe.set_topo(float(location.latitude), float(location.longitude), float(location.altitude))
+    def calculate_planet_position(
+        self,
+        date: datetime,
+        planet: Planet,
+        location: Optional[Location] = None
+    ) -> Dict[str, float]:
+        """Calculate position of a planet."""
+        jd = self._julian_day(date)
         
+        # Generate cache key
+        cache_key = self._cache.generate_key(date, planet.value)
+        cached_result = self._cache.get(cache_key)
+        if cached_result:
+            return cached_result
+
+        # Calculate position
+        if planet == Planet.KETU:
+            # Ketu is 180° opposite to Rahu
+            rahu_pos = self.calculate_planet_position(date, Planet.RAHU, location)
+            position = (rahu_pos["longitude"] + 180) % 360
+            speed = -rahu_pos["speed"]  # Opposite direction
+        else:
+            # Calculate using Swiss Ephemeris
+            flags = swe.FLG_SWIEPH
+            if location:
+                # Use topocentric positions if location provided
+                flags |= swe.FLG_TOPOCTR
+                swe.set_topo(
+                    location.latitude,
+                    location.longitude,
+                    location.altitude or 0
+                )
+            
+            result = swe.calc_ut(jd, self._planet_map[planet], flags)
+            position = result[0][0]  # Longitude
+            speed = result[3]  # Daily motion
+
+        # Store result
+        result = {
+            "longitude": position,
+            "speed": speed,
+            "is_retrograde": speed < 0
+        }
+        
+        self._cache.set(cache_key, result)
+        return result
+
+    def calculate_house_cusps(
+        self,
+        date: datetime,
+        location: Location,
+        system: str = "P"
+    ) -> List[float]:
+        """Calculate house cusps using specified system."""
+        jd = self._julian_day(date)
+        
+        # Generate cache key
+        cache_key = self._cache.generate_key(
+            date,
+            location.latitude,
+            location.longitude,
+            system
+        )
+        cached_result = self._cache.get(cache_key)
+        if cached_result:
+            return cached_result
+
+        # Calculate cusps
+        cusps, ascmc = swe.houses_ex(
+            jd,
+            location.latitude,
+            location.longitude,
+            bytes(system, "utf-8")
+        )
+        
+        # Store and return results
+        result = list(cusps[1:13])  # Only need the 12 house cusps
+        self._cache.set(cache_key, result)
+        return result
+
+    def calculate_aspect(
+        self,
+        pos1: float,
+        pos2: float,
+        orb: float = 1.0
+    ) -> Optional[Aspect]:
+        """Calculate aspect between two positions."""
+        # Calculate shortest angular distance
+        diff = abs((pos1 - pos2 + 180) % 360 - 180)
+        
+        # Check each aspect type
+        for aspect in Aspect:
+            if abs(diff - aspect.angle) <= orb:
+                return aspect
+        
+        return None
+
+    def calculate_aspects(
+        self,
+        positions: Dict[Planet, float],
+        orb: float = 1.0
+    ) -> List[Tuple[Planet, Planet, Aspect]]:
+        """Calculate all aspects between planets."""
+        aspects = []
+        planets = list(positions.keys())
+        
+        for i, p1 in enumerate(planets):
+            for p2 in planets[i+1:]:
+                aspect = self.calculate_aspect(
+                    positions[p1],
+                    positions[p2],
+                    orb
+                )
+                if aspect:
+                    aspects.append((p1, p2, aspect))
+        
+        return aspects
+
+    def get_house(self, longitude: float, cusps: List[float]) -> House:
+        """Determine house from longitude and cusps."""
+        for i in range(12):
+            next_i = (i + 1) % 12
+            if cusps[next_i] < cusps[i]:  # Cusp crosses 0°
+                if longitude >= cusps[i] or longitude < cusps[next_i]:
+                    return House(i + 1)
+            elif cusps[i] <= longitude < cusps[next_i]:
+                return House(i + 1)
+        
+        # Fallback (shouldn't happen with valid data)
+        return House(1)
+
+    def calculate_planetary_positions(
+        self,
+        date: datetime,
+        location: Optional[Location] = None
+    ) -> Dict[Planet, Dict[str, float]]:
+        """Calculate positions for all planets."""
         positions = {}
-        for planet_id, planet_name in self.planet_map.items():
-            try:
-                # Calculate flags
-                flags = 2  # FLG_SWIEPH
-                flags |= 256  # FLG_SPEED
-                flags |= 32768  # FLG_TOPOCTR
-                flags |= 64  # FLG_SIDEREAL
-                flags |= 2048  # FLG_EQUATORIAL
-                flags |= 128  # FLG_NOGDEFL
-                
-                result, status = swe.calc_ut(jd, planet_id, flags)
-                
-                if isinstance(result, (list, tuple)) and len(result) >= 4:
-                    positions[planet_name] = {
-                        'longitude': float(result[0]),
-                        'latitude': float(result[1]),
-                        'distance': float(result[2]),
-                        'speed': {
-                            'degrees_per_day': float(result[3]),
-                            'is_retrograde': float(result[3]) < 0,
-                            'relative_speed': abs(float(result[3]) / 1)
-                        }
-                    }
-                    
-                    # Round all values to 6 decimal places
-                    positions[planet_name]['longitude'] = round(positions[planet_name]['longitude'], 6)
-                    positions[planet_name]['latitude'] = round(positions[planet_name]['latitude'], 6)
-                    positions[planet_name]['distance'] = round(positions[planet_name]['distance'], 6)
-                    positions[planet_name]['speed']['degrees_per_day'] = round(positions[planet_name]['speed']['degrees_per_day'], 6)
-                    positions[planet_name]['speed']['relative_speed'] = round(positions[planet_name]['speed']['relative_speed'], 6)
-            except Exception as e:
-                self.logger.error(f"Error calculating position for {planet_name}: {str(e)}")
-                positions[planet_name] = {
-                    'longitude': 0.0,
-                    'latitude': 0.0,
-                    'distance': 0.0,
-                    'speed': {
-                        'degrees_per_day': 0.0,
-                        'is_retrograde': False,
-                        'relative_speed': 0.0
-                    }
-                }
-        
+        for planet in Planet:
+            positions[planet] = self.calculate_planet_position(
+                date,
+                planet,
+                location
+            )
         return positions

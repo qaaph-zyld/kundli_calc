@@ -153,18 +153,19 @@ class EnhancedHouseAnalysisEngine:
                 'trine': 0.9,
                 'sextile': 0.8,
                 'square': 0.6,
-                'opposition': 0.5
+                'opposition': 0.5,
+                'none': 0.0  # No aspect effect
             }
             aspect_type = aspect.get('type', 'conjunction')
             aspect_strength *= aspect_type_factor[aspect_type]
             
-            # Consider applying/separating
+            # Consider if aspect is applying or separating
             if aspect.get('is_applying', False):
                 aspect_strength *= 1.1
             
             total_strength += aspect_strength
         
-        # Average and normalize
+        # Average the total strength
         return min(100, total_strength / len(aspects))
     
     def _calculate_lord_strength(
@@ -224,15 +225,26 @@ class EnhancedHouseAnalysisEngine:
         
         if lord_house == exaltation_houses.get(house):
             return 'exalted'
+            
+        # Check if houses form special combinations
+        if lord_house in self.special_combinations['kendra']:
+            if house in self.special_combinations['kendra']:
+                return 'friend'
         
-        # Define friendly houses (simplified)
-        house_diff = abs(house - lord_house)
-        if house_diff in [3, 5, 9, 11]:
-            return 'friend'
-        elif house_diff in [4, 8, 12]:
-            return 'enemy'
-        else:
-            return 'neutral'
+        if lord_house in self.special_combinations['trikona']:
+            if house in self.special_combinations['trikona']:
+                return 'friend'
+                
+        if lord_house in self.special_combinations['dusthana']:
+            if house not in self.special_combinations['dusthana']:
+                return 'enemy'
+                
+        if house in self.special_combinations['dusthana']:
+            if lord_house not in self.special_combinations['dusthana']:
+                return 'enemy'
+        
+        # Default to neutral for other relationships
+        return 'neutral'
     
     def analyze_house(
         self,

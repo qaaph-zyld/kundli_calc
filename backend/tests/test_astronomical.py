@@ -206,3 +206,103 @@ def test_error_handling():
     )  # Invalid coordinates
     positions = calc.calculate_planetary_positions(datetime.now(), invalid_location)
     assert positions is not None  # Should handle invalid input gracefully
+
+@pytest.fixture
+def calculator():
+    return AstronomicalCalculator()
+
+def test_planet_positions(calculator, mocker):
+    """Test calculation of planetary positions"""
+    # Mock swisseph calculations
+    mocker.patch('swisseph.calc_ut', return_value=((120.5, 23.4, 0.9), 0))
+    mocker.patch('swisseph.get_ayanamsa_ut', return_value=24.13)
+    
+    test_date = datetime(2024, 1, 1, 0, 0)
+    planet_id = 0
+    
+    position = calculator.calculate_planet_position(test_date, planet_id)
+    
+    assert isinstance(position, dict)
+    assert 'longitude' in position
+    assert 'latitude' in position
+    assert 'distance' in position
+    assert abs(position['longitude'] - 96.37) < 0.1  # 120.5 - 24.13 = 96.37
+
+def test_house_cusps(calculator, mocker):
+    """Test calculation of house cusps"""
+    # Mock swisseph house calculations
+    mock_cusps = [0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0]
+    mock_ascmc = [83.5, 173.2, 263.1, 353.0]
+    mocker.patch('swisseph.houses_ex', return_value=(mock_cusps, mock_ascmc))
+    
+    test_date = datetime(2024, 1, 1, 0, 0)
+    latitude = 28.6139  # New Delhi
+    longitude = 77.2090
+    
+    houses = calculator.calculate_house_cusps(test_date, latitude, longitude)
+    
+    assert isinstance(houses, dict)
+    assert len(houses['cusps']) == 12
+    assert len(houses['ascmc']) == 4
+    assert houses['cusps'][0] == 0.0  # First house cusp
+    assert houses['ascmc'][0] == 83.5  # Ascendant
+
+def test_aspect_calculation(calculator):
+    """Test calculation of planetary aspects"""
+    # Test exact conjunction
+    assert calculator.calculate_aspect(0.0, 0.0) == ('Conjunction', 0.0)
+    
+    # Test exact opposition
+    assert calculator.calculate_aspect(0.0, 180.0) == ('Opposition', 0.0)
+    
+    # Test exact trine
+    assert calculator.calculate_aspect(0.0, 120.0) == ('Trine', 0.0)
+    
+    # Test near square with orb
+    aspect, orb = calculator.calculate_aspect(0.0, 91.5)
+    assert aspect == 'Square'
+    assert abs(orb - 1.5) < 0.1
+
+def test_invalid_coordinates(calculator):
+    """Test handling of invalid geographical coordinates"""
+    test_date = datetime(2024, 1, 1, 0, 0)
+    
+    # Test invalid latitude
+    with pytest.raises(ValueError, match="Latitude must be between -90 and 90"):
+        calculator.calculate_house_cusps(test_date, 91.0, 77.2090)
+    
+    # Test invalid longitude
+    with pytest.raises(ValueError, match="Longitude must be between -180 and 180"):
+        calculator.calculate_house_cusps(test_date, 28.6139, 181.0)
+
+def test_planet_dignity(calculator, mocker):
+    """Test calculation of planetary dignity"""
+    # Mock planet position calculation
+    mocker.patch.object(calculator, 'calculate_planet_position', 
+                       return_value={'longitude': 15.0, 'latitude': 0.0, 'distance': 1.0})
+    
+    test_date = datetime(2024, 1, 1, 0, 0)
+    planet_id = 0
+    
+    dignity = calculator.calculate_planet_dignity(test_date, planet_id)
+    
+    assert isinstance(dignity, dict)
+    assert 'sign' in dignity
+    assert 'dignity_score' in dignity
+    assert dignity['sign'] == 'Aries'  # 15 degrees is in Aries
+
+def test_retrograde_detection(calculator, mocker):
+    """Test detection of retrograde motion"""
+    # Mock swisseph calculations for retrograde motion
+    mocker.patch('swisseph.calc_ut', return_value=((0.0, 0.0, 0.0, -0.5), 0))
+    
+    test_date = datetime(2024, 1, 1, 0, 0)
+    planet_id = 2
+    
+    is_retrograde = calculator.is_planet_retrograde(test_date, planet_id)
+    assert is_retrograde is True
+
+    # Mock direct motion
+    mocker.patch('swisseph.calc_ut', return_value=((0.0, 0.0, 0.0, 0.5), 0))
+    is_retrograde = calculator.is_planet_retrograde(test_date, planet_id)
+    assert is_retrograde is False

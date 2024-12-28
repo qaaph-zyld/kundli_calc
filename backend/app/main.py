@@ -1,8 +1,9 @@
+"""Main application module."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
-from .api.endpoints import charts, health, birth_charts, horoscope
+from .api.endpoints import charts, health, birth_charts, horoscope, dasha, ashtakavarga, bhava, prediction, shadbala, ayanamsa
 from .core.config import settings
 
 app = FastAPI(
@@ -27,7 +28,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,67 +54,70 @@ app.include_router(
 )
 
 app.include_router(
+    dasha.router,
+    prefix="/api/v1/dasha",
+    tags=["dasha"]
+)
+
+app.include_router(
+    ashtakavarga.router,
+    prefix="/api/v1/ashtakavarga",
+    tags=["ashtakavarga"]
+)
+
+app.include_router(
+    bhava.router,
+    prefix="/api/v1/bhava",
+    tags=["bhava"]
+)
+
+app.include_router(
+    prediction.router,
+    prefix="/api/v1/prediction",
+    tags=["prediction"]
+)
+
+app.include_router(
+    shadbala.router,
+    prefix="/api/v1/shadbala",
+    tags=["shadbala"]
+)
+
+app.include_router(
+    ayanamsa.router,
+    prefix="/api/v1/ayanamsa",
+    tags=["ayanamsa"]
+)
+
+app.include_router(
     health.router,
     prefix="/api/v1/health",
     tags=["health"]
 )
 
+
 def custom_openapi():
+    """Customize OpenAPI schema."""
     if app.openapi_schema:
         return app.openapi_schema
-    
     openapi_schema = get_openapi(
         title=app.title,
         version=app.version,
         description=app.description,
         routes=app.routes,
     )
-    
-    # Add security schemes
-    openapi_schema["components"]["securitySchemes"] = {
-        "APIKeyHeader": {
-            "type": "apiKey",
-            "in": "header",
-            "name": "X-API-Key"
-        }
-    }
-    
-    # Add tags metadata
-    openapi_schema["tags"] = [
-        {
-            "name": "charts",
-            "description": "Operations for calculating and retrieving birth charts"
-        },
-        {
-            "name": "birth-charts",
-            "description": "CRUD operations for managing stored birth charts"
-        },
-        {
-            "name": "health",
-            "description": "API health check endpoints"
-        },
-        {
-            "name": "horoscope",
-            "description": "Operations for calculating and retrieving horoscopes"
-        }
-    ]
-    
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
+
 app.openapi = custom_openapi
+
 
 @app.get("/")
 async def root():
-    """
-    Root endpoint returning API information and links to documentation.
-    """
+    """Root endpoint."""
     return {
-        "message": "Welcome to the South Indian Kundli Calculator API",
+        "message": "Welcome to South Indian Kundli Calculator API",
         "version": app.version,
-        "documentation": {
-            "swagger": "/api/docs",
-            "redoc": "/api/redoc",
-            "openapi_json": "/api/openapi.json"
-        }
+        "docs_url": app.docs_url
     }
